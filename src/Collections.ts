@@ -135,14 +135,15 @@ export abstract class ExtendedIterable<TElement> implements Iterable<TElement> {
         throw new Error("Not Implemented");
     }
 
-    public join(): never {
-        // TODO
+    public join(delimeter?: string): never {
         throw new Error("Not Implemented");
-    }
+        
+        this.toArray
+        let result = "";
 
-    public keys(): never {
-        // TODO
-        throw new Error("Not Implemented");
+        for(const item of this) {
+
+        }
     }
 
     public lastIndexOf(): never {
@@ -164,9 +165,14 @@ export abstract class ExtendedIterable<TElement> implements Iterable<TElement> {
         throw new Error("Not Implemented");
     }
 
-    public reverseOrder(): never {
-        // TODO
-        throw new Error("Not Implemented");
+    public reverseOrder(): ExtendedIterable<TElement> {
+        const stack = new Stack<TElement>()
+        
+        for (const item of this) {
+            stack.push(item);
+        }
+        
+        return stack;
     }
 
     public slice(): never {
@@ -175,9 +181,9 @@ export abstract class ExtendedIterable<TElement> implements Iterable<TElement> {
     }
 
     public some(predicate: Predicate<this, TElement>): boolean {
-        return !!this.find(
+        return this.find(
             (element, index, iterable) => predicate(element, index, iterable),
-        );
+        ) !== undefined;
     }
 
     public sort(): never {
@@ -185,20 +191,33 @@ export abstract class ExtendedIterable<TElement> implements Iterable<TElement> {
         throw new Error("Not Implemented");
     }
 
+    public toArray(): TElement[] {
+        const result = [];
+        for(const item of this) {
+            result.push(item);
+        }
+        return result;
+    }
+
     public toLocaleString(): never {
         // TODO
         throw new Error("Not Implemented");
     }
 
-    public toString(): never {
-        // TODO
-        throw new Error("Not Implemented");
+    public toString(): string {
+        // TODO: make this faster
+        return this.toArray().toString();
     }
 
     public values(): never {
         // TODO
         throw new Error("Not Implemented");
     }
+}
+
+export abstract class BidirectionalIterable<TElement> extends ExtendedIterable<TElement> {
+    abstract [Symbol.iterator](): Iterator<TElement>;
+    abstract getReverseIterator(): Iterator<TElement>;
 }
 
 type Predicate<TIterable extends ExtendedIterable<TElement> | TElement[], TElement> = 
@@ -303,389 +322,93 @@ class FlatMappedIterator<TSource, TResult, TSourceIterable extends Iterable<TSou
     }
 }
 
-export class SinglyLLNode<TElement> {
-    public next: SinglyLLNode<TElement> | undefined;
-    public item: TElement;
-
-    constructor(item: TElement) {
-        this.item = item;
-    }
-}
-
-export class LLNode<TElement> extends SinglyLLNode<TElement> {
-    public next: LLNode<TElement> | undefined;
-    public previous: LLNode<TElement> | undefined;
-    public item: TElement;
-
-    constructor(item: TElement) {
-        super(item);
-    }
-}
-
-/** An iterator for iterating through the nodes of a linked list */
-abstract class LLNodeIterator<TNode extends SinglyLLNode<TElement>, TElement> implements Iterator<TNode> {
-    private _first: TNode | undefined;
-    private _current: TNode | undefined;
-    protected abstract _movementStrategy: (node: TNode) => TNode;
-    
-    constructor(first: TNode) {
-        this._first = first;
-    }
-
-    public next(): IteratorResult<TNode> {        
-        if (!this._current) {
-            this._current = this._first;
-            this._first = undefined;
-
-            if (!this._current) {
-                return {
-                    done: true,
-                    value: undefined
-                }
-            }
-
-            return { 
-                done: false, 
-                value: this._current 
-            };
-        }
-
-        const next = this._movementStrategy(this._current);
-        if (!next) {
-            return { 
-                done: true, 
-                value: undefined 
-            };
-        }
-
-        this._current = next;
-        return { 
-            done: false, 
-            value: this._current
-        };
-    }
-}
-
-class ForwardLLNodeIterator<TNode extends SinglyLLNode<TElement>, TElement> extends LLNodeIterator<TNode, TElement> {
-    protected override _movementStrategy = (node: TNode) => node.next as TNode;
-
-    constructor(first: TNode) {
-        super(first);
-    }
-}
-
-class BackwardLLNodeIterator<TNode extends LLNode<TElement>, TElement> extends LLNodeIterator<TNode, TElement> {
-    protected override _movementStrategy = (node: TNode) => node.previous as TNode;
-
-    constructor(last: TNode) {
-        super(last);
-    }
-}
-
-/** An iterator for iterating through the elements of a linked list */
-class LLElementIterator<TNode extends SinglyLLNode<TElement>, TElement> implements Iterator<TElement> {
-    protected _nodeIterator: LLNodeIterator<TNode, TElement>;
-
-    public next(): IteratorResult<TElement> {      
-        // Grab our node iterator result.
-        const iterResult = this._nodeIterator.next();
-        
-        if (iterResult.done) {
-            // The node iterator is done, so we're also done.
-            return iterResult;
-        }
-
-        // The node iterator had a value, extract its 'item' field.
-        return {
-            done: false,
-            value: iterResult.value.item
-        };
-    }
-}
-
-export class SinglyLinkedList<TElement> extends ExtendedIterable<TElement> {
-    // Documented in base class
-    public get length(): number {
-        return this._length;
-    };
-    private _length: number = 0;
-
-    public first: SinglyLLNode<TElement> | undefined;
-
-    public addItemAfter(node: SinglyLLNode<TElement>, itemToAdd: TElement): void {
-        this.addNodeAfter(node, new SinglyLLNode(itemToAdd));
-    }
-
-    public addNodeAfter(node: SinglyLLNode<TElement>, nodeToAdd: SinglyLLNode<TElement>): void {
-        if (node.next) {
-            nodeToAdd.next = node.next;
-        }
-        node.next = nodeToAdd;
-        this._length++;
-    }
-
-    public addItemFirst(item: TElement) {
-        this.addNodeFirst(new SinglyLLNode(item));
-    }
-
-    public addNodeFirst(node: SinglyLLNode<TElement>): this {
-        if (this.first) {
-            node.next = this.first;
-        }
-
-        this.first = node;
-        return this;
-    }
-
-    public addItemLast(item: TElement) {
-        const nodeToAddAfter = this.getNodes()
-            .findLast(() => true);
-
-        this.addItemAfter(nodeToAddAfter, item);
-    }
-
-    public addNodeLast(nodeToAdd: SinglyLLNode<TElement>): this {
-        const nodeToAddAfter = this.getNodes()
-            .findLast(() => true);
-
-        this.addNodeAfter(nodeToAddAfter, nodeToAdd);
-        return this;
-    }
-
-    public clear(): void {
-        this.first = undefined;
-    }
-
-    public removeItem(item: TElement): boolean {
-        const nodeBeforeItemToRemove = this.getNodes()
-            .find(node => node.next?.item === item);
-
-        if (!nodeBeforeItemToRemove) { return false; }
-
-        nodeBeforeItemToRemove.next = nodeBeforeItemToRemove.next?.next;
-        return true;
-    }
-
-    public removeNode(node: SinglyLLNode<TElement>): boolean {
-        const nodeBeforeNodeToRemove = this.getNodes()
-            .find(currentNode => currentNode.next === node);
-
-        if (!nodeBeforeNodeToRemove) { return false; }
-        
-        nodeBeforeNodeToRemove.next = nodeBeforeNodeToRemove.next?.next;
-        return true;
-    }
-
-    public removeFirst(): SinglyLLNode<TElement> | undefined {
-        const oldFirst = this.first;
-        this.first = this.first?.next;
-        return oldFirst;
-    }
-
-    public removeLast(): SinglyLLNode<TElement> | undefined {
-        let secondToLastNode: SinglyLLNode<TElement> | undefined = undefined;
-
-        for (const node of this.getNodes()) {
-            if (node.next) { secondToLastNode = node; }
-        }
-
-        let lastNode: SinglyLLNode<TElement> | undefined = undefined;
-        if (secondToLastNode) {
-            lastNode = secondToLastNode.next;
-            secondToLastNode.next = undefined;
-        }
-        return lastNode;
-    }
-
-    protected getNodes(): ExtendedIterable<SinglyLLNode<TElement>> {
-        if (!this.first) {
-            return ExtendedIterable.empty<SinglyLLNode<TElement>>();
-        }
-        return new ForwardLLNodeIterable<SinglyLLNode<TElement>, TElement>(this.first);
-    }
-
-    public [Symbol.iterator](): Iterator<TElement> {
-        return this.getNodes()
-            .map(node => node.item)
-            [Symbol.iterator]();
-    }
-}
-
-export class DoublyLinkedList<TElement> extends ExtendedIterable<TElement> {
-    // Documented in base class
-    public get length(): number {
-        return this._length;
-    };
-    private _length: number = 0;
-
-    public first: LLNode<TElement> | undefined;
-    public last: LLNode<TElement> | undefined;
-
-    public addItemAfter(nodeToAddAfter: LLNode<TElement>, itemToAdd: TElement): void {
-        this.addNodeAfter(nodeToAddAfter, new LLNode(itemToAdd));
-    }
-
-    public addNodeAfter(nodeToAddAfter: LLNode<TElement>, nodeToAdd: LLNode<TElement>): void {
-        if (nodeToAddAfter.next) {
-            if (nodeToAddAfter.next.next) {
-                nodeToAddAfter.next.next.previous = nodeToAdd;
-            }
-            nodeToAdd.next = nodeToAddAfter.next;
-        }
-        nodeToAddAfter.next = nodeToAdd;
-        this._length++;
-    }
-
-    public addItemFirst(item: TElement) {
-        this.addNodeFirst(new SinglyLLNode(item));
-    }
-
-    public addNodeFirst(node: SinglyLLNode<TElement>): this {
-        if (this.first) {
-            node.next = this.first;
-        }
-
-        // this.first = node;
-        return this;
-    }
-
-    public addItemLast(item: TElement) {
-        const nodeToAddAfter = this.getNodesForward()
-            .findLast(() => true);
-
-        this.addItemAfter(nodeToAddAfter, item);
-    }
-
-    public addNodeLast(nodeToAdd: LLNode<TElement>): this {
-        const nodeToAddAfter = this.getNodesForward()
-            .findLast(() => true);
-
-        this.addNodeAfter(nodeToAddAfter, nodeToAdd);
-        return this;
-    }
-
-    public clear(): void {
-        this.first = undefined;
-    }
-
-    public removeItem(item: TElement): boolean {
-        const nodeBeforeItemToRemove = this.getNodesForward()
-            .find(node => node.next?.item === item);
-
-        if (!nodeBeforeItemToRemove) { return false; }
-
-        nodeBeforeItemToRemove.next = nodeBeforeItemToRemove.next?.next;
-        return true;
-    }
-
-    public removeNode(node: SinglyLLNode<TElement>): boolean {
-        const nodeBeforeNodeToRemove = this.getNodesForward()
-            .find(currentNode => currentNode.next === node);
-
-        if (!nodeBeforeNodeToRemove) { return false; }
-        
-        nodeBeforeNodeToRemove.next = nodeBeforeNodeToRemove.next?.next;
-        return true;
-    }
-
-    public removeFirst(): this {
-        this.first = this.first?.next;
-        return this;
-    }
-
-    public removeLast(): this {
-        let secondToLastNode: SinglyLLNode<TElement> | undefined = undefined;
-
-        for (const node of this.getNodesForward()) {
-            if (node.next) { secondToLastNode = node; }
-        }
-
-        if (secondToLastNode) {
-            secondToLastNode.next = undefined;
-        }
-        return this;
-    }
-
-    protected getNodesForward(): ExtendedIterable<SinglyLLNode<TElement>> {
-        if (!this.first) {
-            return ExtendedIterable.empty<SinglyLLNode<TElement>>();
-        }
-        return new ForwardLLNodeIterable<SinglyLLNode<TElement>, TElement>(this.first);
-    }
-
-    public [Symbol.iterator](): Iterator<TElement> {
-        return this.getNodesForward()
-            .map(node => node.item)
-            [Symbol.iterator]();
-    }
-}
-
-class ForwardLLNodeIterable<TNode extends SinglyLLNode<TElement>, TElement> extends ExtendedIterable<TNode> {
-    private _startingNode: TNode;
-    
-    constructor(startingNode: TNode) {
-        super();
-        this._startingNode = startingNode;
-    }
-
-    [Symbol.iterator](): Iterator<TNode> {
-        return new ForwardLLNodeIterator(this._startingNode);
-    }
-}
-
-class BackwardLLNodeIterable<TNode extends LLNode<TElement>, TElement> extends ExtendedIterable<TNode> {
-    private _startingNode: TNode;
-
-    constructor(startingNode: TNode) {
-        super();
-        this._startingNode = startingNode;
-    }
-
-    [Symbol.iterator](): Iterator<TNode> {
-        return new BackwardLLNodeIterator(this._startingNode);
-    }
-}
-
-// export class Queue<TElement> extends ExtendedIterable<TElement> {
-//     private start: LLNode<TElement> | undefined;
-//     private end: LLNode<TElement> | undefined;
-
-//     public dequeue(): TElement | undefined {
-//         if (!this.start) {
-//             return undefined;
-//         }
-
-//         const oldStart = this.start;
-//         this.start = this.start.next;
-//         return oldStart.item;
-//     }
-
-//     public enqueue(item: TElement) {
-//         this.end?.next = 
-//     }
-// }
-
 export class Stack<TElement> extends ExtendedIterable<TElement> {
+    /** The number of elements in the Stack */
+    public get length(): number {
+        return this._length;
+    }
+    /** The number of elements in the Stack */
+    private _length: number = 0;
     /** The Linked List that actually handles our push/pop operations */
-    private _linkedList: SinglyLinkedList<TElement> = new SinglyLinkedList<TElement>();
+    private _top?: StackElement<TElement>;
+
+    private _enableDebugging: boolean = true;
+    private _asArray: TElement[] = [];
 
     /** Puts an item on the top of the stack */
-    push(item: TElement) {
-        this._linkedList.addItemFirst(item);
+    push(item: TElement): this {
+        this._length++;
+        if (this._enableDebugging) this._asArray.push(item);
+
+        if (this._top === undefined) {
+            this._top = new StackElement(item);
+            return this;
+        }
+
+        const newElement = new StackElement(item)
+        newElement.next = this._top;
+        this._top = newElement;
+        return this;
     }
 
     /** Removes and returns the item on top of the stack */
     pop(): TElement | undefined {
-        return this._linkedList.removeFirst()?.item;
+        if (this._enableDebugging) this._asArray.pop();
+        const oldTop = this._top;
+        this._top = this._top?.next;
+        this._length--;
+        return oldTop?.item;
     }
 
     /** Returns the item on top of the stack without removing it */
     peek(): TElement | undefined {
-        return this._linkedList.first?.item;
+        return this._top?.item;
+    }
+
+    /** Clears the stack so that there are no elements in it. */
+    clear() {
+        this._top = undefined;
+        this._length = 0;
+    }
+
+    public toString(): string {
+        return this.toArray().toString();
+    }
+
+    public inspect(depth, opts) {
+        return this.toArray().toString();
     }
 
     [Symbol.iterator](): Iterator<TElement> {
-        return this._linkedList[Symbol.iterator]();
+        return new StackElementIterator(this._top);
+    }
+}
+
+class StackElementIterator<T> implements Iterator<T> {
+    private _current: StackElement<T> | undefined;
+
+    constructor(top: StackElement<T> | undefined) {
+        this._current = top;
+    }
+
+    public next(): IteratorResult<T> {
+        const valToReturn = this._current;
+        this._current = this._current?.next;
+        
+        if (valToReturn === undefined) {
+            return { done: true, value: undefined };
+        }
+
+        return { done: false, value: this._current.item };
+    }
+}
+
+class StackElement<T> {
+    public next?: StackElement<T>;
+    item: T;
+
+    constructor(item: T) {
+        this.item = item;
     }
 }
 

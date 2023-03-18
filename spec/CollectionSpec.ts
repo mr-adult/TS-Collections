@@ -1,4 +1,4 @@
-import jasmine = require("jasmine");
+require("jasmine");
 import { ExtendedIterable } from "../src/Collections";
 
 class ArrayIterableForTesting<T> extends ExtendedIterable<T> {
