@@ -8,8 +8,8 @@ export abstract class ExtendedIterable<TElement> implements Iterable<TElement> {
     abstract [Symbol.iterator](): Iterator<TElement>;
 
     /** 
-     * A singleton instance of an empty iterable. This objects behavior is always the same,
-     * so we can reference share instances to cut down on its memory footprint.
+     * A singleton instance of an empty iterable. This object's behavior is always the same,
+     * so we can reference share across instances to cut down on its memory footprint.
      */
     private static _emptyIterable: EmptyIterable | undefined;
 
@@ -19,13 +19,15 @@ export abstract class ExtendedIterable<TElement> implements Iterable<TElement> {
      */
     public get length() {
         let length = 0;
-
         for (const _ of this) {
             length++;
         }
-
         return length;
     }
+
+    protected _enableDebugging: boolean = false;
+    // @ts-expect-error This should only be used in debugging. Do not access it!
+    protected _asArray: TElement[]
 
     /**
      * 
@@ -44,11 +46,10 @@ export abstract class ExtendedIterable<TElement> implements Iterable<TElement> {
     }
 
     /** Gets an empty iterable object. This should be used in place of null/undefined. */
-    public static empty<TElement>(): ExtendedIterable<TElement> {
+    public static empty<TElement = any>(): ExtendedIterable<TElement> {
         if (!ExtendedIterable._emptyIterable) {
             ExtendedIterable._emptyIterable = new EmptyIterable();
         }
-
         return ExtendedIterable._emptyIterable;
     }
 
@@ -67,24 +68,19 @@ export abstract class ExtendedIterable<TElement> implements Iterable<TElement> {
         throw new Error("Not Implemented");
     }
 
-    public find(predicate: Predicate<this, TElement>): TElement | undefined {
-        
+    public find(predicate?: Predicate<this, TElement>): TElement | undefined {
         let index = 0;
-
         for(const element of this) {            
-            if (predicate(element, index, this)) {
+            if (!predicate || predicate(element, index, this)) {
                 return element;
-            }
-            
+            }   
             index++;
         }
-
         return undefined;
     }
 
     public findIndex(predicate: Predicate<this, TElement>): number {
         let index = -1;
-        
         this.find((element, index, iterable) => {
             if (predicate(element, index, iterable)) {
                 index = index;
@@ -92,13 +88,18 @@ export abstract class ExtendedIterable<TElement> implements Iterable<TElement> {
             }
             return false;
         });
-
         return index;
     }
 
-    public findLast(predicate: Predicate<this, TElement>): never {
-        // TODO
-        throw new Error("Not Implemented");
+    public findLast(predicate?: Predicate<this, TElement>): TElement | undefined {
+        let index = 0
+        let match: TElement | undefined = undefined;
+        for (const element of this) {
+            if (!predicate || predicate(element, index, this)) {
+                match = element;
+            }
+        }
+        return match;
     }
 
     public findLastIndex(): never {
@@ -135,15 +136,8 @@ export abstract class ExtendedIterable<TElement> implements Iterable<TElement> {
         throw new Error("Not Implemented");
     }
 
-    public join(delimeter?: string): never {
-        throw new Error("Not Implemented");
-        
-        this.toArray
-        let result = "";
-
-        for(const item of this) {
-
-        }
+    public join(delimeter?: string): string {
+        return this.toArray().join(delimeter);
     }
 
     public lastIndexOf(): never {
@@ -175,15 +169,22 @@ export abstract class ExtendedIterable<TElement> implements Iterable<TElement> {
         return stack;
     }
 
+    public skip(numberToSkip: number): ExtendedIterable<TElement> {
+        return new SkipIterable(this, numberToSkip);
+    }
+
     public slice(): never {
         // TODO
         throw new Error("Not Implemented");
     }
 
     public some(predicate: Predicate<this, TElement>): boolean {
-        return this.find(
-            (element, index, iterable) => predicate(element, index, iterable),
-        ) !== undefined;
+        let index = -1;
+        for (const element of this) {
+            index++;
+            if (predicate(element, index, this)) { return true; }
+        }
+        return false;
     }
 
     public sort(): never {
@@ -215,6 +216,23 @@ export abstract class ExtendedIterable<TElement> implements Iterable<TElement> {
     }
 }
 
+/**
+ * Wraps an iterable, attaching all of the ExtendedIterable methods to it
+ */
+export class WrappedIterable<TElement> extends ExtendedIterable<TElement> {
+    private _iterable: Iterable<TElement>;
+    
+    constructor(iterable: Iterable<TElement>) {
+        super();
+        this._iterable = iterable;
+        if (this._enableDebugging) this._asArray = this.toArray();
+    }
+
+    public [Symbol.iterator]() {
+        return this._iterable[Symbol.iterator]();
+    }
+}
+
 export abstract class BidirectionalIterable<TElement> extends ExtendedIterable<TElement> {
     abstract [Symbol.iterator](): Iterator<TElement>;
     abstract getReverseIterator(): Iterator<TElement>;
@@ -241,6 +259,7 @@ class MappedIterable<TSource, TResult, TSourceIterable extends Iterable<TSource>
         super();
         this._sourceIterable = sourceIterable;
         this._selector = selector;
+        if (this._enableDebugging) this._asArray = this.toArray();
     }
 
     [Symbol.iterator]() {
@@ -283,57 +302,100 @@ class FlatMappedIterable<TSource, TResult, TSourceIterable extends Iterable<TSou
     }
 }
 
-class FlatMappedIterator<TSource, TResult, TSourceIterable extends Iterable<TSource>> implements Iterator<TResult> {
-    private _sourceIterable: TSourceIterable
-    private _sourceIterator: Iterator<TSource>;
+// class FlatMappedIterator<TSource, TResult, TSourceIterable extends Iterable<TSource>> implements Iterator<TResult> {
+//     private _sourceIterable: TSourceIterable
+//     private _sourceIterator: Iterator<TSource>;
 
-    private _currentlyActiveChildIterator: Iterator<TResult> | undefined;
+//     private _currentlyActiveChildIterator: Iterator<TResult> | undefined;
 
-    private _selector: (element: TSource, index: number, iterable: TSourceIterable) => Iterable<TResult>;
-    private _index = 0;
+//     private _selector: (element: TSource, index: number, iterable: TSourceIterable) => Iterable<TResult>;
+//     private _index = 0;
 
-    constructor(sourceIterable: TSourceIterable, selector: (element: TSource, index: number, iterable: TSourceIterable) => Iterable<TResult>) {
+//     constructor(sourceIterable: TSourceIterable, selector: (element: TSource, index: number, iterable: TSourceIterable) => Iterable<TResult>) {
+//         this._sourceIterable = sourceIterable;
+//         this._sourceIterator = sourceIterable[Symbol.iterator]();
+//         this._selector = selector;
+//     }
+
+//     public next(): IteratorResult<TResult> {
+//         let childIterResult: IteratorResult<TResult> | undefined = undefined
+//         while (!this._currentlyActiveChildIterator || childIterResult?.done) {
+//             childIterResult = this._currentlyActiveChildIterator?.next();
+
+//             if (childIterResult && !childIterResult.done) {
+//                 return { done: false, value: childIterResult.value }
+//             }
+    
+//             if (!childIterResult || childIterResult?.done) {
+//                 const parentIterResult = this._sourceIterator.next();
+//                 if (parentIterResult.done) { return { done: true, value: undefined }; }
+        
+//                 this._currentlyActiveChildIterator = 
+//                     this._selector(
+//                         parentIterResult.value, 
+//                         this._index++, 
+//                         this._sourceIterable
+//                     )[Symbol.iterator]();
+//             }
+//         }
+//     }
+// }
+
+class SkipIterable<TElement> extends ExtendedIterable<TElement> {
+    private _sourceIterable: Iterable<TElement>;
+    private _numberToSkip: number;
+    constructor(sourceIterable: Iterable<TElement>, numberToSkip: number) {
+        super();
         this._sourceIterable = sourceIterable;
-        this._sourceIterator = sourceIterable[Symbol.iterator]();
-        this._selector = selector;
+        this._numberToSkip = numberToSkip;
+        if (this._enableDebugging) this._asArray = this.toArray();
     }
 
-    public next(): IteratorResult<TResult> {
-        let childIterResult: IteratorResult<TResult> | undefined = undefined
-        while (!this._currentlyActiveChildIterator || childIterResult?.done) {
-            childIterResult = this._currentlyActiveChildIterator?.next();
-
-            if (childIterResult && !childIterResult.done) {
-                return { done: false, value: childIterResult.value }
-            }
-    
-            if (!childIterResult || childIterResult?.done) {
-                const parentIterResult = this._sourceIterator.next();
-                if (parentIterResult.done) { return { done: true, value: undefined }; }
-        
-                this._currentlyActiveChildIterator = 
-                    this._selector(
-                        parentIterResult.value, 
-                        this._index++, 
-                        this._sourceIterable
-                    )[Symbol.iterator]();
-            }
-        }
+    [Symbol.iterator]() {
+        return new SkipIterator(this._sourceIterable[Symbol.iterator](), this._numberToSkip);
     }
 }
 
+class SkipIterator<TElement> implements Iterator<TElement, undefined> {
+    private _sourceIterable: Iterator<TElement>;
+    private _numberToSkip: number;
+    private _isFirstIteration = true;
+
+    constructor(sourceIterator: Iterator<TElement>, numberToSkip: number) {
+        this._sourceIterable = sourceIterator;
+        this._numberToSkip = numberToSkip;
+    }
+
+    next(): IteratorResult<TElement, undefined> {
+        if (!this._isFirstIteration) {
+            return this._sourceIterable.next();
+        }
+
+        this._isFirstIteration = false;
+        let iterResult: IteratorResult<TElement, undefined> = { done: true, value: undefined };
+        for (let i = 0; i <= this._numberToSkip; i++) {
+            iterResult = this._sourceIterable.next();
+            if (iterResult.done) { break; }
+        }
+        return iterResult;
+    }
+}
+
+/** A stack data structure built on top of a linked list */
 export class Stack<TElement> extends ExtendedIterable<TElement> {
     /** The number of elements in the Stack */
-    public get length(): number {
+    public override get length(): number {
         return this._length;
     }
-    /** The number of elements in the Stack */
     private _length: number = 0;
+
     /** The Linked List that actually handles our push/pop operations */
     private _top?: StackElement<TElement>;
 
-    private _enableDebugging: boolean = true;
-    private _asArray: TElement[] = [];
+    constructor() {
+        super();
+        if (this._enableDebugging) this._asArray = [];
+    }
 
     /** Puts an item on the top of the stack */
     push(item: TElement): this {
@@ -371,11 +433,7 @@ export class Stack<TElement> extends ExtendedIterable<TElement> {
         this._length = 0;
     }
 
-    public toString(): string {
-        return this.toArray().toString();
-    }
-
-    public inspect(depth, opts) {
+    public override toString(): string {
         return this.toArray().toString();
     }
 
@@ -395,7 +453,7 @@ class StackElementIterator<T> implements Iterator<T> {
         const valToReturn = this._current;
         this._current = this._current?.next;
         
-        if (valToReturn === undefined) {
+        if (valToReturn === undefined || this._current === undefined) {
             return { done: true, value: undefined };
         }
 
@@ -404,7 +462,10 @@ class StackElementIterator<T> implements Iterator<T> {
 }
 
 class StackElement<T> {
+    /** The next node down the stack */
     public next?: StackElement<T>;
+
+    /** This node's contained value/item */
     item: T;
 
     constructor(item: T) {

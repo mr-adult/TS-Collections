@@ -7,6 +7,7 @@ class ArrayIterableForTesting<T> extends ExtendedIterable<T> {
     constructor(array: T[]) {
         super();
         this._backingArray = array;
+        if (this._enableDebugging) this._asArray = array;
     }
 
     [Symbol.iterator](): Iterator<T> {
