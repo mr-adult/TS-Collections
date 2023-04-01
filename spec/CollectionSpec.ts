@@ -206,7 +206,9 @@ describe("ExtendedIterable", () => {
         });
     });
     describe("skip", () => {
-        // TODO
-        expect(true).toBe(true);
+        it("", () => {
+            // TODO
+            expect(true).toBe(true);
+        });
     });
 });
