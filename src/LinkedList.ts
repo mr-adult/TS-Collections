@@ -2,7 +2,6 @@ import {ExtendedIterable} from "./Collections";
 
 /** A doubly-linked list */
 export class LinkedList<TElement> extends ExtendedIterable<TElement> {
-    // Documented in base class
     /** Gets the length of the LinkedList */
     public override get length(): number {
         return this._length;
