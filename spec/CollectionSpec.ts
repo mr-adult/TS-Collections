@@ -1,5 +1,5 @@
 require("jasmine");
-import { ExtendedIterable } from "../src/Collections";
+import { ExtendedIterable, WrappedIterable } from "../src/Collections";
 
 class ArrayIterableForTesting<T> extends ExtendedIterable<T> {
     private _backingArray: T[];
@@ -34,5 +34,14 @@ describe("ExtendedIterable", () => {
                 createTestIter().length
             );
         });
+    });
+});
+
+describe("flat", () => {
+    it("flattens an array", () => {
+        const arr = new WrappedIterable([[0,1,2,3],[4,5,6],[7,8,9]]).flat().toArray();
+        for (let i = 0; i < 10; i++) {
+            expect(arr[i]).toBe(i);
+        }
     });
 });
