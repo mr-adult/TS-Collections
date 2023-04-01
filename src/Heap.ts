@@ -1,3 +1,5 @@
+import { BinaryTreeNode } from "./TreeNode";
+
 abstract class Heap<T = number> {
     /**
      * This method is used to decide whether first should be sunk in the heap when compared with second.
@@ -42,6 +44,18 @@ abstract class Heap<T = number> {
         this._heap[0] = this._heap.pop()!;
         this._heapifyDown(0);
         return oldTop;
+    }
+
+    /**
+     * Converts this heap into a tree structure that can be traversed.
+     */
+    public toTree(): HeapNode<T> | undefined {
+        if (this.length === 0) { return undefined; }
+        return new HeapNode<T>(
+            this._heap[0]!,
+            (Heap.getLeft as Function).bind(undefined, this, 0) as () => HeapNode<T>,
+            (Heap.getRight as Function).bind(undefined, this, 0) as () => HeapNode<T>,
+        );
     }
 
     private _heapifyUp(index: number): void {
@@ -100,6 +114,45 @@ abstract class Heap<T = number> {
 
     private static _defaultComparer<T>(first: T, second: T): number {
         return first < second ? -1 : first > second? 1 : 0;
+    }
+
+    private static getLeft<T>(heap: Heap<T>, index: number): HeapNode<T> | undefined {
+        const leftChildIndex = heap.getLeftChildIndex(index);
+        if (leftChildIndex > heap.length - 1) { return undefined; }
+        const getLeft = (Heap.getLeft as Function).bind(undefined, heap, leftChildIndex) as () => HeapNode<T> | undefined;
+        const getRight = (Heap.getRight as Function).bind(undefined, heap, leftChildIndex) as () => HeapNode<T> | undefined;
+
+        return new HeapNode<T>(
+            heap._heap[leftChildIndex]!, 
+            getLeft, 
+            getRight
+        );
+    }
+
+    private static getRight<T>(heap: Heap<T>, index: number): HeapNode<T> | undefined {
+        const getRightChildIndex = heap.getRightChildIndex(index);
+        if (getRightChildIndex > heap.length - 1) { return undefined; }
+        const getLeft = (Heap.getLeft as Function).bind(undefined, heap, getRightChildIndex) as () => HeapNode<T> | undefined;
+        const getRight = (Heap.getRight as Function).bind(undefined, heap, getRightChildIndex) as () => HeapNode<T> | undefined;
+
+        return new HeapNode<T>(
+            heap._heap[getRightChildIndex]!, 
+            getLeft, 
+            getRight
+        );
+    }
+}
+
+class HeapNode<T> extends BinaryTreeNode<HeapNode<T>> {
+    value: T;
+    getLeft: () => HeapNode<T> | undefined;
+    getRight: () => HeapNode<T> | undefined;
+
+    constructor(value: T, getLeft: () => HeapNode<T> | undefined, getRight: () => HeapNode<T> | undefined) {
+        super();
+        this.value = value;
+        this.getLeft = getLeft;
+        this.getRight = getRight;
     }
 }
 

@@ -15,6 +15,12 @@ describe("MinHeap", () => {
             heap2.push(i);
         }
 
+        // heap1 was constructed in ascending order, so BFS should return the elements in ascending order
+        let value = 0;
+        for (const node of heap1.toTree()!.BFS()) {
+            expect(node.value).toEqual(value++);
+        }
+
         for (const heap of [heap1, heap2]) {
             for (let i = 100; i >= 0; i--) {
                 expect(heap.length).toEqual(i + 1);
@@ -35,6 +41,12 @@ describe("MaxHeap", () => {
         }
         for (let i = 100; i >= 0; i--) {
             heap2.push(i);
+        }
+
+        // heap2 was constructed in descending order, so BFS should return the elements in descending order
+        let value = 100;
+        for (const node of heap2.toTree()!.BFS()) {
+            expect(node.value).toEqual(value--);
         }
 
         for (const heap of [heap1, heap2]) {
