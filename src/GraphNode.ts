@@ -1,4 +1,5 @@
 import { ExtendedIterable, WrappedIterable, Stack } from "./Collections"
+import { MinHeap } from "./Heap";
 import { LLNodeIterable, Queue } from "./LinkedList";
 
 export abstract class GraphNode<TNodeInGraph extends GraphNode<TNodeInGraph> | null | undefined> {
@@ -365,6 +366,48 @@ export abstract class GraphNode<TNodeInGraph extends GraphNode<TNodeInGraph> | n
             .map(nodeWithMetadata => nodeWithMetadata.node) ??
             ExtendedIterable.empty<TNodeInGraph>();
     }
+
+    /**
+     * Performs a Djikstra's algorithm search of the graph. Nodes will be returned out in ascending order of
+     * the cost to get to them. For example, if it costs 4 to get to B and 8 to get to C from A, then the nodes
+     * will be returned in the order A, B, C.
+     * @param costFunction The function that computes the cost to move from the "from" node to the "to" node.
+     * @returns An iterable that will return the nodes in the order of a Djikstra's algorithm search.
+     */
+    public Djikstra(
+        this: TNodeInGraph, 
+        costFunction: 
+        (
+            from: NodeWithBackPathWithParent<TNodeInGraph>, 
+            to: NodeWithBackPathWithParent<TNodeInGraph>
+        ) => number
+    ): ExtendedIterable<NodeWithBackPath<TNodeInGraph>> {
+        return new DjikstraIterable<TNodeInGraph>(this, costFunction);
+    }
+
+    /**
+     * Performs an A* algorithm search of the graph. Nodes will be returned out in ascending order of
+     * the cost to get to them. For example, if it costs 4 to get to B and 8 to get to C from A, then the nodes
+     * will be returned in the order A, B, C.
+     * @param costFunction The function that computes the cost to move from the "from" node to the "to" node.
+     * @param heuristicFunction A function that computes the heuristic cost to move from the "from" node to the "to" node
+     * @returns An iterable that will return the nodes in the order of an A* algorithm search.
+     */
+    public AStar(
+        this: TNodeInGraph, 
+        costFunction: 
+        (
+            from: NodeWithBackPathWithParent<TNodeInGraph>, 
+            to: NodeWithBackPathWithParent<TNodeInGraph>
+        ) => number, 
+        heuristicFunction: 
+        (
+            from: NodeWithBackPathWithParent<TNodeInGraph>, 
+            to: NodeWithBackPathWithParent<TNodeInGraph>
+        ) => number
+    ): ExtendedIterable<NodeWithBackPath<TNodeInGraph>> {
+        return new AStarIterable(this, costFunction, heuristicFunction);
+    }
 }
 
 export enum TraversalType {
@@ -558,6 +601,8 @@ export class NodeWithMetadata<T> {
     }
 }
 
+export type NodeWithBackPathWithParent<T> = NodeWithBackPath<T> & { parent: T };
+
 /** 
  * A wrapper class for a tree node to contain the node itself along with
  * metadata about its position in the tree.
@@ -679,13 +724,16 @@ abstract class DepthFirstIterator<TNodeInGraph> implements Iterator<NodeWithMeta
 
         if (checkForCirularReferences) {
             this.getConnections = function(this: DepthFirstIterator<TNodeInGraph>, getConnectionsOG: (node:TNodeInGraph) => Iterable<TNodeInGraph> | null | undefined, node: TNodeInGraph): Iterable<TNodeInGraph> | null | undefined {
+                this._visitedNodes.add(node);
                 let connections = getConnectionsOG(node);
                 if (!connections) { return connections; }
-                return new WrappedIterable(connections).filter(node => { 
-                    let result = !this._visitedNodes.has(node); 
-                    this._visitedNodes.add(node);
+                return new WrappedIterable(connections).filter(function(this: DepthFirstIterator<TNodeInGraph>, connection: TNodeInGraph) { 
+                    let result = !this._visitedNodes.has(connection);
+                    if (!result) {
+                        this._visitedNodes.add(connection);
+                    }
                     return result;
-                });
+                }.bind(this));
             }.bind(this, getConnections);
         }
         else {
@@ -700,6 +748,7 @@ abstract class DepthFirstIterator<TNodeInGraph> implements Iterator<NodeWithMeta
         this._traversalStack.clear();
         this._ancestors = [];
         this._currenTNodeInGraphForEachIterator.clear();
+        this._visitedNodes.clear();
     }
 
     protected _tryToPushIterator(): boolean {
@@ -832,6 +881,7 @@ class IterativeDeepeningBreadthFirstIterator<TNodeInGraph> implements Iterator<N
     private _DFSIterator: DepthFirstPreorderIterator<TNodeInGraph>;
     private _currentDepth: number = 0;
     private _hasMoreNodes: boolean = true;
+    private _visitedNodes: Set<TNodeInGraph> = new Set<TNodeInGraph>();
 
     constructor(traversalRoot: TNodeInGraph, checkForCircularReferences: boolean, getConnections: (node: TNodeInGraph) => Iterable<TNodeInGraph> | null | undefined) {
         this._DFSIterator = new DepthFirstPreorderIterator(traversalRoot, checkForCircularReferences, getConnections);
@@ -849,6 +899,8 @@ class IterativeDeepeningBreadthFirstIterator<TNodeInGraph> implements Iterator<N
                 }
     
                 if (iterResult.value.depth < this._currentDepth) { continue; }
+                if (this._visitedNodes.has(iterResult.value.node)) { continue; }
+                this._visitedNodes.add(iterResult.value.node);
                 this._hasMoreNodes = true;
                 return iterResult;
             } while(true)
@@ -901,11 +953,13 @@ class QueueBreadthFirstIterator<TNodeInGraph> implements Iterator<NodeWithBackPa
             this._getConnections = function(this: QueueBreadthFirstIterator<TNodeInGraph>, getConnectionsOG: (node: TNodeInGraph) => Iterable<TNodeInGraph> | null | undefined, node: TNodeInGraph): Iterable<TNodeInGraph> | null | undefined {
                 let children = getConnectionsOG(node);
                 if (!children) { return children; }
-                return new WrappedIterable(children).filter(child => { 
+                return new WrappedIterable(children).filter(function(this: QueueBreadthFirstIterator<TNodeInGraph>, child: TNodeInGraph) { 
                     let result = !this._visitedNodes.has(child); 
-                    this._visitedNodes.add(child);
+                    if (result) {
+                        this._visitedNodes.add(node);
+                    }
                     return result;
-                });
+                }.bind(this));
             }.bind(this, getConnections);
         }
         else {
@@ -927,6 +981,7 @@ class QueueBreadthFirstIterator<TNodeInGraph> implements Iterator<NodeWithBackPa
             iterResult = this._traveralQueue.peek()?.next();
         }
 
+        this._visitedNodes.add(iterResult.value.node);
         let children: Iterable<TNodeInGraph> | null | undefined = undefined;
         if (iterResult.value?.node !== null && iterResult.value.node !== undefined) {
             children = this._getConnections(iterResult.value.node);
@@ -944,5 +999,93 @@ class QueueBreadthFirstIterator<TNodeInGraph> implements Iterator<NodeWithBackPa
         }
 
         return { done: false, value: iterResult.value };
+    }
+}
+
+type CostFunction<T> = (from: NodeWithBackPathWithParent<T>, to: NodeWithBackPathWithParent<T>) => number;
+
+class DjikstraIterable<TNodeInGraph extends GraphNode<TNodeInGraph> | null | undefined> extends ExtendedIterable<NodeWithBackPath<TNodeInGraph>> {
+    private _root: TNodeInGraph;
+    private _costFunction: (from: NodeWithBackPathWithParent<TNodeInGraph>, to: NodeWithBackPathWithParent<TNodeInGraph>) => number;
+
+    constructor(root: TNodeInGraph, costFunction: CostFunction<TNodeInGraph>) {
+        super();
+        this._root = root;
+        this._costFunction = costFunction;
+    }
+
+    [Symbol.iterator](): Iterator<NodeWithBackPath<TNodeInGraph>, undefined> {
+        return new DjikstraIterator(this._root, this._costFunction); 
+    }
+}
+
+type DjikstraHeapNode<TNodeInGraph> = {
+    totalCost: number;
+    graphNodeWithBackPath: NodeWithBackPath<TNodeInGraph>;
+}
+
+class DjikstraIterator<TNodeInGraph extends GraphNode<TNodeInGraph> | null | undefined> implements Iterator<NodeWithBackPath<TNodeInGraph>, undefined> {
+    private _costFunction: CostFunction<TNodeInGraph>;
+    private _traversalHeap: MinHeap<DjikstraHeapNode<TNodeInGraph>>;
+    private _visitedNodes: Set<TNodeInGraph> = new Set();
+
+    constructor(root: TNodeInGraph, costFunction: CostFunction<TNodeInGraph>) {
+        this._costFunction = costFunction;
+        this._traversalHeap = new MinHeap<DjikstraHeapNode<TNodeInGraph>>((a, b) => a.totalCost - b.totalCost);
+        this._traversalHeap.push({ 
+            totalCost: 0, 
+            graphNodeWithBackPath: new NodeWithBackPath(root, undefined) 
+        });
+    }
+
+    public next(): IteratorResult<NodeWithBackPath<TNodeInGraph>, undefined> {
+        let djikstraHeapNode = this._traversalHeap.pop();
+        while (djikstraHeapNode && this._visitedNodes.has(djikstraHeapNode.graphNodeWithBackPath.node)) {
+            djikstraHeapNode = this._traversalHeap.pop();
+        }
+        if (djikstraHeapNode === undefined) {
+            return { done: true, value: undefined };
+        }
+
+        if (djikstraHeapNode.graphNodeWithBackPath.node) {
+            this._visitedNodes.add(djikstraHeapNode.graphNodeWithBackPath.node);
+            const adjacents = djikstraHeapNode.graphNodeWithBackPath.node.getAdjacentNodes();
+            if (adjacents) { 
+                const adjacentsToUse = new WrappedIterable(adjacents).filter(node => !this._visitedNodes.has(node));
+                for (const adjacent of adjacentsToUse) {
+                    let currentNodeWithBackPath = djikstraHeapNode.graphNodeWithBackPath;
+                    this._traversalHeap.push({
+                        totalCost: djikstraHeapNode.totalCost + this._costFunction(
+                            currentNodeWithBackPath as NodeWithBackPathWithParent<TNodeInGraph>, 
+                            new NodeWithBackPath(adjacent, currentNodeWithBackPath) as NodeWithBackPathWithParent<TNodeInGraph>
+                        ), 
+                        graphNodeWithBackPath: new NodeWithBackPath(adjacent, currentNodeWithBackPath)
+                    });
+                }
+            }
+        }
+
+        return { done: false, value: djikstraHeapNode.graphNodeWithBackPath };
+    }
+}
+
+class AStarIterable<TNodeInGraph extends GraphNode<TNodeInGraph> | null | undefined> extends ExtendedIterable<NodeWithBackPath<TNodeInGraph>> {
+    private _root: TNodeInGraph;
+    private _costFunction: CostFunction<TNodeInGraph>;
+
+    constructor(
+        root: TNodeInGraph, 
+        costFunction: CostFunction<TNodeInGraph>, 
+        heuristicFunction: CostFunction<TNodeInGraph>
+    ) {
+        super();
+        this._root = root;
+        this._costFunction = function(costFunction: CostFunction<TNodeInGraph>, heuristicFunction: CostFunction<TNodeInGraph>, from: NodeWithBackPathWithParent<TNodeInGraph>, to: NodeWithBackPathWithParent<TNodeInGraph>) { 
+            return costFunction(from, to) + heuristicFunction(from, to); 
+        }.bind(undefined, costFunction, heuristicFunction);
+    }
+
+    [Symbol.iterator](): Iterator<NodeWithBackPath<TNodeInGraph>, undefined> {
+        return new DjikstraIterator(this._root, this._costFunction); 
     }
 }
