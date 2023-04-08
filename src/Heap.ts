@@ -36,7 +36,7 @@ abstract class Heap<T = number> {
      * Pops an element from the heap.
      */
     pop(): T | undefined {
-        if (this._heap.length < 1) {
+        if (this._heap.length < 2) {
             return this._heap.pop();
         }
 
